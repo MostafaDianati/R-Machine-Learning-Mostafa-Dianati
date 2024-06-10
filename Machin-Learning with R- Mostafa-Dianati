@@ -1,0 +1,246 @@
+
+
+library(mlbench)
+library(caret)           # For feature selection
+library( rpart )         # For the "CART" algorithm
+library( rpart.plot )    # For plotting decision trees
+library(rattle) 
+library(RColorBrewer)
+library( C50 )           # For the "C5.0" algorithm
+library( randomForest )  # For the "Random Forest" algorithm
+library( liver ) 
+library(ada)
+library(deepnet)
+library(xgboost)
+library(cvms)
+library(MLeval)          # for ROC curve
+library(dplyr)
+library(readxl)
+library(openxlsx)
+library(naniar)
+require(knitr) # for better tables in the Markdown
+require(caTools) # for sample.split function
+#------------------------------------------------------------------------------
+
+##Read the Data
+
+setwd("C:\\Users\\VIO-BehnamRayaneh\\Dropbox\\Brest Cancer\\Data for first model")
+data = read_excel("Brest_first_data.xlsx")
+
+#------------------------------------------------------------------------
+#Change var to factor
+data$Age_cat = as.factor(data$Age_cat)
+data$Edu_U = as.factor(data$Edu_U)
+data$Occupation = as.factor(data$Occupation)
+data$Family_his = as.factor(data$Family_his)
+data$U_Smoke = as.factor(data$U_Smoke)
+data$Romate_smoke_use = as.factor(data$Romate_smoke_use)
+data$OCP = as.factor(data$OCP)
+data$X_ray_his_chest = as.factor(data$X_ray_his_chest)
+data$Hysterectomy = as.factor(data$Hysterectomy)
+data$Brest_benign_Problem_his = as.factor(data$Brest_benign_Problem_his)
+data$WHO_physical_Activity_Intencity = as.factor(data$WHO_physical_Activity_Intencity)
+data$BMI_cat = as.factor(data$BMI_cat)
+data$Weight_Changes = as.factor(data$Weight_Changes)
+data$First_delivery_Age_CAT = as.factor(data$First_delivery_Age_CAT)
+data$Br_Feeding_Cat = as.factor(data$Br_Feeding_Cat)
+data$Abortion_history = as.factor(data$Abortion_history)
+data$Menarch_age = as.factor(data$Menarch_age)
+data$Menopausal_status = as.factor(data$Menopausal_status)
+data$Diabetes = as.factor(data$Diabetes)
+data$HavingCancer = as.factor(data$HavingCancer)
+str(data)
+#---------------------------------------------------------------------------------
+# Dealing with missing values
+sum(is.na(data))  ##check for missing value##
+#-----------------------------------------------------------------------
+#Machine Learning Model#
+
+set.seed(1001)
+
+data.sets = partition( data = data, prob = c( 0.70, 0.30 ) )
+
+train = data.sets $ part1
+test  = data.sets $ part2
+
+##table of Target variable frequency##
+table(data$HavingCancer)  # in all data set
+table(train$HavingCancer) #in train set
+table(test$HavingCancer)  # in test set
+
+##Proportion of Target variable in train and test##
+prop.table((table(train$HavingCancer))) #in train
+prop.table((table(test$HavingCancer)))  # in test
+#----------------------------------------------------------------
+
+
+############################################################
+#############---Machine learning algorithms---##############
+############################################################
+set.seed(42)
+
+#Train control setting
+control <- trainControl(method="repeatedcv", repeats=3,number = 10)
+
+metric <- "Accuracy"
+
+seed <- 42
+
+
+# Random Forest
+set.seed(seed)
+fit.rf <- train(HavingCancer~ .
+                
+                , data=train, method="rf", metric=metric,trControl=control)
+
+# Bagged CART
+set.seed(seed)
+fit.CART <- train(HavingCancer~ .
+                  , data=train, method="treebag", metric=metric,trControl=control)
+
+#xgbTree
+set.seed(seed)
+fit.xgbTree <- train( HavingCancer~ .
+                      , data=train, method='xgbTree',metric=metric,trControl=control)
+
+
+
+# Boosted Logistic Regression
+set.seed(seed)
+fit.LogitBoost <- train(HavingCancer~ .
+                        , data=train, method="LogitBoost", metric=metric,trControl=control)
+
+
+
+# kknn
+set.seed(seed)
+fit.kknn <- train(HavingCancer~ .
+                  , data=train, method="kknn", metric=metric,trControl=control)
+
+
+
+#-----------------------------------------------------------------------
+
+set.seed(42)
+
+# estimate variable importance for each model
+importance <- varImp(fit.rf, scale=TRUE)
+print(importance)  # summarize importance
+
+plot(importance)  #plot importance
+
+#---------------------------------------------------------------------
+#----PREDICTION----#
+
+#Random Forest
+predictions_rf <- predict(fit.rf, test)
+confusionMatrix(predictions_rf, test$HavingCancer)
+
+# Bagged CART
+predictions_CART <- predict(fit.CART, test)
+confusionMatrix(predictions_CART, test$HavingCancer)
+
+#xgbTree
+predictions_xgbTree <- predict(fit.xgbTree, test)
+confusionMatrix(predictions_xgbTree, test$HavingCancer)
+summary(predictions_xgbTree)
+
+
+# Boost Classification Trees
+predictions_LogitBoost <- predict(fit.LogitBoost, test)
+confusionMatrix(predictions_LogitBoost , test$HavingCancer)
+
+#kknn
+predictions_kknn <- predict(fit.kknn, test)
+confusionMatrix(predictions_kknn, test$HavingCancer)
+
+
+#-----------------------------------------------------------------------
+
+##-----plot confusion matrix------##
+s=confusionMatrix(predictions_rf, test$HavingCancer)
+s$table
+
+#Confusion matrix
+fourfoldplot(s$table, main= "rf")
+
+
+#---------------------------------------------------------------------------------------
+
+##------plotting ROC curve-----##
+
+#Train control setting for ROC curve
+control <- trainControl(method="repeatedcv", number=3, repeats=10, 
+                        classProbs=T,savePredictions = T)
+
+levels(train$HavingCancer) <- c("no","yes") #change the target variable to character
+
+seed <- 42
+
+metric <- "Accuracy"
+
+# kknn
+set.seed(seed)
+fit.kknn <- train(HavingCancer~ ., 
+                  data=train, method="kknn", metric=metric,trControl=control)
+
+# Boosted Logistic Regression
+set.seed(seed)
+fit.LogitBoost <- train(HavingCancer~ .
+                        ,data=train,method="LogitBoost", metric=metric,trControl=control)
+
+# Random Forest
+set.seed(seed)
+fit.rf <- train(HavingCancer~.
+                , data=train, method="rf", metric=metric,trControl=control)
+
+# eXtreme Gradient Boosting
+set.seed(seed)
+fit.xgbTree <- train(HavingCancer~.,
+                     data=train, method="xgbTree", trControl=control)
+
+#CART
+set.seed(seed)
+fit.CART <- train(HavingCancer~ .,
+                  data=train, method='treebag', metric=metric,trControl=control)
+
+#--------------------------------------------------------------------------
+#----PREDICTION----#
+
+levels(test$HavingCancer) <- c("no","yes" )
+seed <- 42
+#kknn
+predictions_kknn <- predict(fit.kknn, test, type = "prob")
+#Boosted Logistic Regression
+predictions_LogitBoost <- predict(fit.LogitBoost, test, type = "prob")
+#Random Forest
+predictions_rf <- predict(fit.rf, test, type = "prob")
+# eXtreme Gradient Boosting
+predictions_xgbTree <- predict(fit.xgbTree, test, type = "prob")
+#CART
+predictions_CART <- predict(fit.CART, test, type = "prob")
+
+#------------------------------------------------------------------------
+###--------ROC Curve--------###
+library( pROC )
+seed <- 42
+plot.roc( test$HavingCancer,predictions_xgbTree$yes, col = "black", lwd = 2,
+          xlab = "False Positive Rate", ylab = "True Positive Rate", print.auc = T, print.auc.y = 0.50, legacy.axes=T,add=FALSE, asp = NA,grid=TRUE,ci=T)
+plot.roc( test$HavingCancer, predictions_kknn$yes, legacy.axes = T, add = T, col = "forestgreen", print.auc = T, print.auc.y = 0.45,ci=T)
+plot.roc( test$HavingCancer, predictions_rf$yes, legacy.axes = T, add = T, col = "darkblue", print.auc = T, print.auc.y = 0.40,ci=T)
+plot.roc( test$HavingCancer, predictions_CART$yes, legacy.axes = T, add = T, col = "red2", print.auc = T, print.auc.y = 0.35,ci=T)
+plot.roc( test$HavingCancer, predictions_LogitBoost$yes, legacy.axes = T, add = T, col = "darkmagenta", print.auc = T, print.auc.y = 0.30,ci=T)
+
+
+text( x = 1-0.95, y = 0.3 - .06 * 0, "xgbTree", col = "black" , cex=1.15)
+text( x = 1-0.95, y = 0.3 - .06 * 1, "kknn", col = "red" , cex=1.15)
+text( x = 1-0.95, y = 0.3 - .06 * 2, "Random Forest", col = "blue" , cex=1.15)
+text( x = 1-0.95, y = 0.3 - .06 * 3, "CART", col = "purple" , cex=1.15)
+text( x = 1-0.95, y = 0.3 - .06 * 4, "LogitBoost", col = "#008600", cex=1.15 )
+
+
+legend("bottomright", 
+       legend = c("XGB", "KNN", "RF","b-CART","LB"), 
+       col = c("black", "forestgreen", "darkblue","red2","darkmagenta"),
+       lwd = 2,cex=.8)
+
