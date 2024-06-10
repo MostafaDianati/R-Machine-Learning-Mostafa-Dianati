@@ -24,7 +24,7 @@ require(caTools) # for sample.split function
 
 ##Read the Data
 
-setwd("C:\\Users\\VIO-BehnamRayaneh\\Dropbox\\Brest Cancer\\Data for first model")
+setwd("C:\\Users\\Mostafa\\Dropbox\\Brest Cancer\\Data for first model")
 data = read_excel("Brest_first_data.xlsx")
 
 #------------------------------------------------------------------------
